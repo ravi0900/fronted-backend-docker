@@ -3,37 +3,165 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Student Grades</title>
+    <title>Submit Student Grade</title>
     <style>
         body { font-family: sans-serif; margin: 2rem auto; max-width: 48rem; padding: 0 1rem; }
+        label { display: block; margin-top: 1rem; }
+        input { box-sizing: border-box; display: block; margin-top: 0.35rem; max-width: 24rem; padding: 0.5rem; width: 100%; }
+        button { cursor: pointer; margin-top: 1rem; padding: 0.55rem 0.9rem; }
+        .error { color: #b00020; }
+        .success { color: #176b2c; }
+        table { border-collapse: collapse; margin-top: 1rem; width: 100%; }
+        th, td { border: 1px solid #ccc; padding: 0.55rem; text-align: left; }
+        th { background: #f4f4f4; }
         pre { background: #f4f4f4; border-radius: 0.4rem; overflow-x: auto; padding: 1rem; }
     </style>
 </head>
 <body>
     <main>
-        <h1>Student Grades</h1>
-        <p id="status" role="status">Loading grades…</p>
-        <pre id="grades" aria-label="Student grade data"></pre>
+        <h1>Submit Student Grade</h1>
+        <form id="grade-form">
+            <label for="name">Student name</label>
+            <input id="name" name="name" type="text" autocomplete="name" required>
+
+            <label for="email">Email address</label>
+            <input id="email" name="email" type="email" autocomplete="email" required>
+            <p id="email-error" class="error" role="alert" hidden></p>
+
+            <label for="grade">Grade</label>
+            <input id="grade" name="grade" type="number" step="any" required>
+
+            <button id="submit-button" type="submit">Submit grade</button>
+            <p id="form-status" role="status"></p>
+        </form>
+
+        <section aria-labelledby="grades-heading">
+            <h2 id="grades-heading">Grade data</h2>
+            <p id="grades-status" role="status">Loading grade data…</p>
+            <pre id="grades" aria-label="Grade data"></pre>
+        </section>
+
+        <section aria-labelledby="submitted-heading">
+            <h2 id="submitted-heading">Submitted grades</h2>
+            <p id="view-status" role="status">Loading submissions…</p>
+            <table>
+                <thead>
+                    <tr>
+                        <th scope="col">Student</th>
+                        <th scope="col">Email</th>
+                        <th scope="col">Grade</th>
+                    </tr>
+                </thead>
+                <tbody id="submission-list"></tbody>
+            </table>
+        </section>
     </main>
     <script>
-        const status = document.getElementById('status');
+        const form = document.getElementById('grade-form');
+        const emailInput = document.getElementById('email');
+        const emailError = document.getElementById('email-error');
+        const formStatus = document.getElementById('form-status');
+        const submitButton = document.getElementById('submit-button');
+        const gradesStatus = document.getElementById('grades-status');
         const grades = document.getElementById('grades');
+        const viewStatus = document.getElementById('view-status');
+        const submissionList = document.getElementById('submission-list');
+        let submissions = [];
 
-        fetch('/api')
-            .then(async response => {
+        async function loadGradeData() {
+            try {
+                const response = await fetch('/api');
                 const data = await response.json();
                 if (!response.ok) {
-                    throw new Error(data.error || 'Unable to load grades.');
+                    throw new Error(data.error || 'Unable to load grade data.');
                 }
-                return data;
-            })
-            .then(data => {
                 grades.textContent = JSON.stringify(data, null, 2);
-                status.textContent = 'Grades loaded successfully.';
-            })
-            .catch(error => {
-                status.textContent = `Error: ${error.message}`;
-            });
+                gradesStatus.textContent = 'Grade data loaded.';
+            } catch (error) {
+                gradesStatus.textContent = `Error: ${error.message}`;
+            }
+        }
+
+        function renderSubmissions() {
+            submissionList.replaceChildren();
+            for (const submission of submissions) {
+                const row = document.createElement('tr');
+                for (const value of [submission.name, submission.email, submission.grade]) {
+                    const cell = document.createElement('td');
+                    cell.textContent = value ?? '';
+                    row.appendChild(cell);
+                }
+                submissionList.appendChild(row);
+            }
+            viewStatus.textContent = submissions.length ? '' : 'No grades have been submitted yet.';
+        }
+
+        async function loadSubmissions() {
+            try {
+                const response = await fetch('/view');
+                const data = await response.json();
+                const students = Array.isArray(data) ? data : data.students;
+                if (!response.ok || !Array.isArray(students)) {
+                    throw new Error(data.message || data.error || 'Unable to load submissions.');
+                }
+                submissions = students;
+                renderSubmissions();
+            } catch (error) {
+                viewStatus.textContent = `Error: ${error.message}`;
+            }
+        }
+
+        form.addEventListener('submit', async event => {
+            event.preventDefault();
+            emailError.hidden = true;
+            formStatus.textContent = '';
+
+            const formData = new FormData(form);
+            const submission = {
+                name: formData.get('name').trim(),
+                email: formData.get('email').trim(),
+                grade: Number(formData.get('grade'))
+            };
+            const normalizedEmail = submission.email.toLowerCase();
+            if (submissions.some(existing => String(existing.email).trim().toLowerCase() === normalizedEmail)) {
+                emailError.textContent = 'This email has already been submitted.';
+                emailError.hidden = false;
+                emailInput.focus();
+                return;
+            }
+
+            submitButton.disabled = true;
+            try {
+                const response = await fetch('/submit', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(submission)
+                });
+                const result = await response.json();
+                if (!response.ok) {
+                    if (response.status === 409) {
+                        emailError.textContent = result.message || 'This email has already been submitted.';
+                        emailError.hidden = false;
+                        emailInput.focus();
+                        return;
+                    }
+                    throw new Error(result.message || result.error || 'Unable to submit grade.');
+                }
+
+                form.reset();
+                formStatus.textContent = result.message || 'Grade submitted successfully.';
+                formStatus.className = 'success';
+                await loadSubmissions();
+            } catch (error) {
+                formStatus.textContent = `Error: ${error.message}`;
+                formStatus.className = 'error';
+            } finally {
+                submitButton.disabled = false;
+            }
+        });
+
+        loadGradeData();
+        loadSubmissions();
     </script>
 </body>
 </html>
