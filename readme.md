@@ -69,20 +69,11 @@ paths (`backend` and `frontend`) are relative to the Compose file. Compose
 builds a separate image for each service; it does not create one combined
 image.
 
-From the `Project` directory, build both images without starting the
-containers:
-
-```bash
-docker compose up
-```
-
-```bash
-docker compose build
-```
+From the `Project` directory:
 
 To build the images and run:
 
-up containers
+start containers
 
 ```bash
 docker compose up
