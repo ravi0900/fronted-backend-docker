@@ -1,0 +1,30 @@
+# create to run forntend and backend in docker containers, frontend depends on backend, so backend should be up before frontend
+# version: '1.0'
+services:
+  backend:
+    build: backend
+    hostname: backend-app
+    volumes:
+      - ./backend:/app
+    ports:
+      - "4000:4000"
+    networks:
+      - container_network
+  frontend:
+    build: frontend
+    hostname: frontend-app
+    volumes:
+      - ./frontend:/app
+    environment:
+      - BACKEND_URL=http://backend-app:4000
+    ports:
+      - "3000:3000"
+    links:
+      - backend
+    depends_on:
+      - backend
+    networks:
+      - container_network
+
+networks:
+    container_network: {}

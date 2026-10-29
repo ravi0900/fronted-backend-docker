@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Student Grades</title>
+    <style>
+        body { font-family: sans-serif; margin: 2rem auto; max-width: 48rem; padding: 0 1rem; }
+        pre { background: #f4f4f4; border-radius: 0.4rem; overflow-x: auto; padding: 1rem; }
+    </style>
+</head>
+<body>
+    <main>
+        <h1>Student Grades</h1>
+        <p id="status" role="status">Loading grades…</p>
+        <pre id="grades" aria-label="Student grade data"></pre>
+    </main>
+    <script>
+        const status = document.getElementById('status');
+        const grades = document.getElementById('grades');
+
+        fetch('/api')
+            .then(async response => {
+                const data = await response.json();
+                if (!response.ok) {
+                    throw new Error(data.error || 'Unable to load grades.');
+                }
+                return data;
+            })
+            .then(data => {
+                grades.textContent = JSON.stringify(data, null, 2);
+                status.textContent = 'Grades loaded successfully.';
+            })
+            .catch(error => {
+                status.textContent = `Error: ${error.message}`;
+            });
+    </script>
+</body>
+</html>
