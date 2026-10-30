@@ -8,6 +8,8 @@ services:
       - ./backend:/app
     ports:
       - "4000:4000"
+    env_file:
+      - backend/.env
     networks:
       - container_network
   frontend:

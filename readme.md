@@ -1,22 +1,43 @@
 # Student Grade App - Docker Guide
 
 This project runs a Flask backend and an Express frontend in separate Docker
-containers. The frontend serves the grades page on port `3000` and requests
-grade data from the backend API on port `4000`.
+containers. The frontend serves a student grade submission form on port `3000`
+and requests data from the backend API on port `4000`.
 
-Fontend and backend image can be found here https://hub.docker.com/r/raviraj12/docker_raviraj-backend/tags
+Frontend and backend images can be found at
+https://hub.docker.com/r/raviraj12/fontend-backend/tags
+
+* Note: pulled backend image should run with env flag
+```bash
+docker run -p 4000:4000 -e URI=mongodb+srv://mongouri raviraj12/fontend-backend:pybackend-v1
+```
+* To run both frontend and backend, it should be on same network
 
 ## Application routes
 
 | URL | Purpose |
 | --- | --- |
 | `http://localhost:3000/` | Frontend page |
-| `http://localhost:3000/api` | Frontend route that forwards the request to the backend |
+| `http://localhost:3000/submit` | Frontend proxy for submitting a student grade (POST) |
+| `http://localhost:3000/view` | Frontend proxy for viewing submitted grades |
 | `http://localhost:4000/` | Backend welcome message |
 | `http://localhost:4000/api` | Student grade data returned by Flask |
+| `http://localhost:4000/submit` | Saves a student grade (POST) |
+| `http://localhost:4000/view` | Returns grades saved in MongoDB |
 
-The browser calls the frontend's `/api` route. The frontend then calls
-`${BACKEND_URL}/api`, and returns the backend response to the page.
+The page submits `name`, `email`, and `grade` to the frontend's `/submit`
+route, which forwards the request to the backend. The page loads submitted
+grades from `/view`. Email addresses are checked without regard to letter case:
+the form reports duplicates inline, and the backend's unique MongoDB index
+enforces the rule even if two submissions arrive at nearly the same time.
+The backend requires `URI` to be set in `backend/.env` for its MongoDB
+connection. This file is excluded from Docker build contexts; Compose and the
+manual `docker run` command pass its values to the container at runtime. The
+safe placeholder file `backend/.env.example` is not excluded.
+
+If the database already contains duplicate email addresses (ignoring letter
+case), remove or merge those duplicates before starting the backend so it can
+create the unique index.
 
 ## Backend Dockerfile
 
@@ -52,7 +73,7 @@ the backend before the frontend:
 ```bash
 docker network create student-grade-network
 docker run -d --name backend-app --network student-grade-network \
-  -p 4000:4000 student-grade-backend:latest
+  --env-file backend/.env -p 4000:4000 student-grade-backend:latest
 docker run -d --name frontend-app --network student-grade-network \
   -e BACKEND_URL=http://backend-app:4000 \
   -p 3000:3000 student-grade-frontend:latest
@@ -106,8 +127,3 @@ docker exec -it <containerid> <cmd>
 docker logs <containerid>
 docker inspect <containerid>
 ```
-
-The current Compose file mounts the source folders at `/app`, but both
-Dockerfiles run the copied application from `/`. Those mounts therefore do not
-replace the files the containers execute. Rebuild the images after changing
-source files for the changes to appear in the containers.
